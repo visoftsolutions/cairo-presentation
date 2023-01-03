@@ -46,7 +46,7 @@ func transaction_loop{range_check_ptr}(
     let (old_from_account: Account*) = dict_read{dict_ptr=account_dict_end}(key=from_account_id);
     let (old_to_account: Account*) = dict_read{dict_ptr=account_dict_end}(key=to_account_id);
     tempvar new_from_valut_balance = (old_from_account.balance - first_transaction.amount);
-    tempvar new_to_valut_balance = (old_to_account.balance + first_transaction.amount - 1);
+    tempvar new_to_valut_balance = (old_to_account.balance + first_transaction.amount);
     assert_nn_le(new_from_valut_balance, MAX_BALANCE);
     assert_nn_le(new_to_valut_balance, MAX_BALANCE);
     
