@@ -1,5 +1,6 @@
 from eth_account.signers.base import BaseAccount
-from web3 import HTTPProvider, Web3, eth
+from web3 import HTTPProvider, Web3, eth, exceptions
+from colorama import Fore
 
 yes = {'yes','y', 'ye', ''}
 no = {'no','n'}
@@ -15,33 +16,48 @@ def prompt():
         else:
             print("Please respond with 'yes' or 'no'")
 
-def tx_kwargs(w3: Web3, sender_account: eth.Account):
-    """
-    Helper function used to send Ethereum transactions.
-    w3: a web3 Ethereum client.
-    sender_account: the account sending the transaction.
-    """
-    nonce = w3.eth.getTransactionCount(sender_account)
-    return {"from": sender_account, "gas": 5*10**6, "gasPrice": 10**10, "nonce": nonce}
+def retry(f):
+    while True:
+        try: ret = f()
+        except exceptions.ContractLogicError as err:
+            print(Fore.LIGHTRED_EX + str(err))
+            print("retrying...")
+            continue
+        except exceptions.TimeExhausted as err:
+            print(Fore.LIGHTRED_EX + str(err))
+            print("retrying...")
+            continue
+        else: return ret
 
 
-def send_transaction(w3, transaction, sender_account: BaseAccount):
+def send_transaction(w3: Web3, transaction, operator: BaseAccount):
     """
     Sends an Ethereum transaction and waits for it to be mined.
     w3: a web3 Ethereum client.
     transaction: the transaction to be sent.
     sender_account: the account sending the transaction.
     """
-    transaction_dict = transaction.buildTransaction(
-        tx_kwargs(w3, sender_account.address))
-    signed_transaction = sender_account.signTransaction(transaction_dict)
-    print("Transaction built and signed")
+    gas_price = int(w3.eth.gas_price*1.2)
+    transaction = transaction.buildTransaction(
+        {
+            "from": operator.address, 
+            "gas": 0,
+            "gasPrice": gas_price,
+            "nonce": w3.eth.getTransactionCount(operator.address)}
+    )
+    
+    gas = int(w3.eth.estimate_gas(transaction)*1.2)
+    transaction.update({"gas": gas})
+    
+    signed_transaction = operator.signTransaction(transaction)
+    print(f'Transaction built and signed. gasPrice: {Web3.fromWei(gas_price, "gwei")} Gwei ', end="", flush=True)
     tx_hash = w3.eth.sendRawTransaction(
         signed_transaction.rawTransaction).hex()
-    print(f"Transaction sent")
-    print(tx_hash)
+        
     receipt = w3.eth.waitForTransactionReceipt(tx_hash)
-    print("Transaction successfully mined")
+    
+    print(Fore.LIGHTGREEN_EX + "successfully mined" + Fore.RESET)
+    print("Tx hash " + Fore.LIGHTBLUE_EX + f"{tx_hash}" + Fore.RESET)
     return receipt
 
 def deploy_contract(
