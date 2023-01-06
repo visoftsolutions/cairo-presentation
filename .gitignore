@@ -8,3 +8,5 @@ provable/main.json
 node_modules/
 
 .vscode/
+
+__pycache__

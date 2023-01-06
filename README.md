@@ -14,6 +14,26 @@ echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.
 echo 'eval "$(pyenv init -)"' >> ~/.profile
 ```
 
+# Install Dependencies
+```shell
+python3 -m venv ./.venv
+source .venv/bin/activate
+pip3 install ecdsa fastecdsa sympy
+pip3 install cairo-lang
+```
+
+# Run Project
+```shell
+npm ci
+npx hardhat compile
+```
+
+# Run Demo
+```shell
+python3 scripts/demo.py
+```
+
+### virtual env
 ```shell
 volta install node@18
 pyenv install 3.9

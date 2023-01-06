@@ -7,14 +7,14 @@ from web3 import HTTPProvider, Web3, eth
 from starkware.cairo.bootloaders.hash_program import compute_program_hash_chain
 from starkware.cairo.lang.vm.crypto import get_crypto_lib_context_manager
 from starkware.cairo.sharp.sharp_client import init_client, SharpClient
+from utils import send_transaction, deploy_contract
 
-
-def deploy_contract(
-    sharp_client: SharpClient,
-    cairo_code_path: str,
-    solidity_compiled_code_path: str,
+def deploy_treasury(
     w3: Web3,
-    operator: BaseAccount
+    operator: BaseAccount,
+    sharp_client: SharpClient,
+    solidity_compiled_code_path: str,
+    cairo_code_path: str,
 ) -> eth.Contract:
     program = sharp_client.compile_cairo(source_code_path=cairo_code_path)
     program_hash = compute_program_hash_chain(program)
@@ -24,27 +24,34 @@ def deploy_contract(
 
     with open(solidity_compiled_code_path) as f:
         artifacts = json.loads(f.read())
-    bytecode = artifacts["bytecode"]
-    abi = artifacts["abi"]
-    new_contract = w3.eth.contract(abi=abi, bytecode=bytecode)
-    transaction = new_contract.constructor(
+    treasury = w3.eth.contract(abi=artifacts["abi"], bytecode=artifacts["bytecode"])
+
+    transaction = treasury.constructor(
         program_hash,
         cairo_verifier,
     )
-    print("Deploying smart contract...")
-    tx_receipt = send_transaction(w3, transaction, operator)
-    assert (
-        tx_receipt["status"] == 1
-    ), f'Failed to deploy contract. Transaction hash: {tx_receipt["transactionHash"]}.'
 
-    contract_address = tx_receipt["contractAddress"]
-    print(
-        f"Smart contract successfully deployed to address {contract_address}\n"
-        "You can track the contract state through this link\n"
-        f"https://goerli.etherscan.io/address/{contract_address}"
+    tx_deploy = deploy_contract(w3, operator, transaction)
+    return w3.eth.contract(address=tx_deploy.contractAddress, abi=artifacts["abi"])
+
+def deploy_token(
+    w3: Web3,
+    operator: BaseAccount,
+    solidity_compiled_code_path: str,
+    token_name: str,
+    token_symbol: str,
+) -> eth.Contract:
+    with open(solidity_compiled_code_path) as f:
+        artifacts = json.loads(f.read())
+    token = w3.eth.contract(abi=artifacts["abi"], bytecode=artifacts["bytecode"])
+
+    transaction = token.constructor(
+        name_=token_name,
+        symbol_=token_symbol
     )
 
-    return w3.eth.contract(abi=abi, address=contract_address)
+    tx_deploy = deploy_contract(w3, operator, transaction)
+    return w3.eth.contract(address=tx_deploy.contractAddress, abi=artifacts["abi"])
 
 
 def main():
@@ -84,40 +91,12 @@ def main():
 
     # Initialize the system.
     sharp_client = init_client(bin_dir="", node_rpc_url=args.rpc_url)
-    treasury_contract = deploy_contract(
+
+    # Deploy contract
+    treasury_contract = deploy_treasury(
         sharp_client, args.program, args.contract, w3, operator
     )
-
-
-def tx_kwargs(w3: Web3, sender_account: eth.Account):
-    """
-    Helper function used to send Ethereum transactions.
-    w3: a web3 Ethereum client.
-    sender_account: the account sending the transaction.
-    """
-    nonce = w3.eth.getTransactionCount(sender_account)
-    return {"from": sender_account, "gas": 5*10**6, "gasPrice": 10**10, "nonce": nonce}
-
-
-def send_transaction(w3, transaction, sender_account: BaseAccount):
-    """
-    Sends an Ethereum transaction and waits for it to be mined.
-    w3: a web3 Ethereum client.
-    transaction: the transaction to be sent.
-    sender_account: the account sending the transaction.
-    """
-    transaction_dict = transaction.buildTransaction(
-        tx_kwargs(w3, sender_account.address))
-    signed_transaction = sender_account.signTransaction(transaction_dict)
-    print("Transaction built and signed")
-    tx_hash = w3.eth.sendRawTransaction(
-        signed_transaction.rawTransaction).hex()
-    print(f"Transaction sent")
-    print(tx_hash)
-    receipt = w3.eth.waitForTransactionReceipt(tx_hash)
-    print("Transaction successfully mined")
-    return receipt
-
+    print(treasury_contract)
 
 if __name__ == "__main__":
     with get_crypto_lib_context_manager("Release"):
