@@ -22,15 +22,11 @@ contract Treasury is Context, Ownable {
 
     uint256 private _lastValutId;
     // account -> token -> valutId
-    mapping (address => mapping (address => uint256)) private _valuts;
+    mapping(address => mapping(address => uint256)) private _valuts;
     // valutId -> balance
-    mapping (uint256 => uint256) _balances;
+    mapping(uint256 => uint256) _balances;
 
-    event ValutRegistration(
-        address account,
-        address token,
-        uint256 id
-    );
+    event ValutRegistration(address account, address token, uint256 id);
 
     constructor(uint256 cairoProgramHash_, address cairoVerifier_) {
         _cairoProgramHash = cairoProgramHash_;
@@ -39,18 +35,25 @@ contract Treasury is Context, Ownable {
         _lastValutId = 0;
     }
 
-    function updateState(uint256[] memory programOutput) public onlyOwner returns (bool) {
+    function updateState(
+        uint256[] memory programOutput
+    ) public onlyOwner returns (bool) {
         // Ensure that a corresponding proof was verified.
         bytes32 outputHash = keccak256(abi.encodePacked(programOutput));
-        bytes32 fact = keccak256(abi.encodePacked(_cairoProgramHash, outputHash));
+        bytes32 fact = keccak256(
+            abi.encodePacked(_cairoProgramHash, outputHash)
+        );
         require(_factRegistry.isValid(fact), "Treasury: invalid cairo proof");
-        
+
         for (uint256 i = 0; i < programOutput.length; i += 3) {
             uint256 valutId = programOutput[i];
             uint256 amountBefore = programOutput[i + 1];
             uint256 amountAfter = programOutput[i + 2];
             require(valutId != 0, "Treasury: invalid valutId");
-            require(_balances[valutId] == amountBefore, "Treasury: invalid input state");
+            require(
+                _balances[valutId] == amountBefore,
+                "Treasury: invalid input state"
+            );
             _balances[valutId] = amountAfter;
         }
         return true;
@@ -92,8 +95,13 @@ contract Treasury is Context, Ownable {
         uint256 valutId = getValutId(token);
         require(valutId != 0, "Treasury: invalid valutId");
         require(token != address(0), "Treasury: invalid token address");
-        uint256 balanceBeforeWithdrawal = _balances[_valuts[_msgSender()][token]];
-        require(balanceBeforeWithdrawal >= amount, "Treasury: insufficient balance");
+        uint256 balanceBeforeWithdrawal = _balances[
+            _valuts[_msgSender()][token]
+        ];
+        require(
+            balanceBeforeWithdrawal >= amount,
+            "Treasury: insufficient balance"
+        );
         IERC20 tokenContract = IERC20(token);
         tokenContract.transfer(_msgSender(), amount);
         unchecked {
